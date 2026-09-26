@@ -47,3 +47,18 @@ PYTHONPATH=src python3 -m silicon_qualification.api --database silicon.sqlite3 -
 ```
 
 服务均提供 `GET /health`，其余接口使用 JSON。进程重启后可以继续查询 SQLite 中的业务状态和审计历史。
+
+## 质量准入决定链（silicon_qualification）
+
+准入决定按不可变事件链管理，修复了"同一批次暂缓后再放行覆盖原决定"的缺陷：
+
+- `analyze` 对当前全部测量生成**内容寻址的分析版本**（按测量快照 SHA-256 去重），每次决定必须引用一个分析版本；
+- `POST /lots/{id}/decisions` 只追加、不覆盖：决定带批次内序号、`prev_decision_id`、当时的批次版本和分析版本；
+- 批次以 `revision` 乐观锁约束后续动作（`expected_revision` 不匹配返回 409），状态机为
+  `engineering → pending_review → hold/rejected → in_review → released …`（已放行不可复议）；
+- 需要重新评审时必须先 `POST /lots/{id}/review-requests` 显式发起复议，复议决定须引用**更新的分析版本**、
+  且由**上一决定人之外**的授权人员作出；
+- 决定与复议请求都要求 `Idempotency-Key`：相同编号+相同载荷返回原结果，相同编号+不同载荷返回 409；
+- `GET /lots/{id}/report` 同时返回 `current_decision`（当前有效决定）与 `decision_chain`（完整决定链），
+  另有 `/decisions`；记录全部落 SQLite，进程重启后暂缓→复议→放行的先后关系仍可经审计事件追溯。
+

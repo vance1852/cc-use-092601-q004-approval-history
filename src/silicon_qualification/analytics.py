@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 
+ALGORITHM_VERSION = "1.0"
+
+
 @dataclass(frozen=True)
 class SpectrumSummary:
     count: int
